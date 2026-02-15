@@ -1,0 +1,132 @@
+@import "tailwindcss";
+
+@theme {
+  /* Portfolite Aesthetic Palette */
+  --color-background: #000000;
+  /* Pure Black */
+  --color-surface: #0a0a0a;
+  /* Deep Graphite */
+  --color-surface-light: #18181b;
+  /* Zinc-900 */
+
+  --color-primary: #ffffff;
+  /* Minimalist White */
+  --color-primary-light: #f4f4f5;
+  --color-primary-dark: #a1a1aa;
+
+  --color-accent: #00E5FF;
+  /* Keep Electric Teal as a subtle micro-accent */
+
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-critical: #ef4444;
+
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #a1a1aa;
+  --color-text-muted: #52525b;
+
+  --radius-3xl: 24px;
+  --radius-4xl: 32px;
+
+  --animate-pulse-slow: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-float: float 6s ease-in-out infinite;
+}
+
+@keyframes float {
+  0% {
+    transform: translateY(0px);
+  }
+
+  50% {
+    transform: translateY(-10px);
+  }
+
+  100% {
+    transform: translateY(0px);
+  }
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-text-primary);
+  font-family: 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Portfolite Layout Utilities */
+.portfolite-card {
+  background-color: var(--color-surface);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-3xl);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.portfolite-card:hover {
+  background-color: var(--color-surface-light);
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 0 40px rgba(255, 255, 255, 0.03);
+}
+
+.minimal-border {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.text-gradient {
+  background: linear-gradient(to right, #ffffff, #a1a1aa);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Premium Background Visuals (Isolated) */
+/* Force app containers to be semi-transparent to show the canvas background while keeping text readable */
+#root,
+.min-h-screen,
+main,
+section {
+  background-color: transparent !important;
+}
+
+/* Glassmorphism for readable content areas */
+.bg-black,
+.bg-slate-950,
+.bg-zinc-950,
+.portfolite-card {
+  background-color: rgba(0, 0, 0, 0.6) !important;
+  backdrop-filter: blur(8px);
+}
+
+nav,
+aside {
+  background-color: rgba(0, 0, 0, 0.4) !important;
+  backdrop-filter: blur(12px);
+}
+
+/* Specific Sidebar transparency if needed */
+.sidebar-container {
+  background: rgba(0, 0, 0, 0.2) !important;
+  backdrop-filter: blur(20px);
+}
+
+/* Base Body Background for Fallback */
+body {
+  background-color: #000;
+}
