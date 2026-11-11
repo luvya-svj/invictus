@@ -1,0 +1,30 @@
+{
+  "name": "invictus",
+  "version": "1.0.0",
+  "description": "PCB Consumption Analytics & Manufacturing Management Platform",
+  "private": true,
+  "scripts": {
+    "install:all": "npm install --prefix backend && npm install --prefix frontend",
+    "dev:backend": "npm run dev --prefix backend",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "build:frontend": "npm run build --prefix frontend",
+    "db:init": "npm run db:init --prefix backend",
+    "db:demo": "npm run db:demo --prefix backend",
+    "db:excel": "npm run db:excel --prefix backend",
+    "db:test": "npm run db:test --prefix backend"
+  },
+  "keywords": [
+    "pcb",
+    "electronics",
+    "inventory",
+    "bom",
+    "manufacturing",
+    "analytics",
+    "supply-chain",
+    "react",
+    "express",
+    "postgresql"
+  ],
+  "author": "luvya-svj",
+  "license": "MIT"
+}

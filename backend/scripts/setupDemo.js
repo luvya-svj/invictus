@@ -1,6 +1,7 @@
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 const { pool } = require('../config/db');
+const bcrypt = require('bcrypt');
 
 const setupDemo = async () => {
     const client = await pool.connect();
@@ -10,6 +11,9 @@ const setupDemo = async () => {
 
         // 1. DROP EXISTING TABLES (Reverse Dependency Order)
         console.log('Cleaning up existing tables...');
+        await client.query('DROP TABLE IF EXISTS excel_rows CASCADE');
+        await client.query('DROP TABLE IF EXISTS excel_sheets CASCADE');
+        await client.query('DROP TABLE IF EXISTS excel_files CASCADE');
         await client.query('DROP TABLE IF EXISTS inventory_transactions CASCADE');
         await client.query('DROP TABLE IF EXISTS production_runs CASCADE');
         await client.query('DROP TABLE IF EXISTS procurement_triggers CASCADE');
@@ -94,30 +98,65 @@ const setupDemo = async () => {
             )
         `);
 
+        // Excel Tables
+        await client.query(`
+            CREATE TABLE excel_files (
+                id SERIAL PRIMARY KEY,
+                original_filename VARCHAR(255) NOT NULL,
+                uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                uploaded_by INTEGER REFERENCES users(id),
+                file_size INTEGER,
+                total_sheets INTEGER
+            )
+        `);
+
+        await client.query(`
+            CREATE TABLE excel_sheets (
+                id SERIAL PRIMARY KEY,
+                file_id INTEGER REFERENCES excel_files(id) ON DELETE CASCADE,
+                sheet_name VARCHAR(255) NOT NULL,
+                row_count INTEGER DEFAULT 0,
+                column_headers JSONB,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+
+        await client.query(`
+            CREATE TABLE excel_rows (
+                id SERIAL PRIMARY KEY,
+                sheet_id INTEGER REFERENCES excel_sheets(id) ON DELETE CASCADE,
+                row_number INTEGER NOT NULL,
+                data JSONB NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+
+        await client.query(`
+            CREATE INDEX IF NOT EXISTS idx_excel_rows_sheet ON excel_rows(sheet_id);
+            CREATE INDEX IF NOT EXISTS idx_excel_sheets_file ON excel_sheets(file_id);
+        `);
+
         // 3. SEED DATA
         console.log('Seeding enterprise-scale data...');
 
         const components = [
-            { pn: 'CAP-10UF', name: 'Capacitor 10µF', desc: 'Electrolytic Capacitor', stock: 1000, demand: 3000, low: 100 },
-            { pn: 'CAP-100UF', name: 'Capacitor 100µF', desc: 'Electrolytic Capacitor', stock: 500, demand: 2000, low: 50 },
-            { pn: 'RES-220', name: 'Resistor 220Ω', desc: 'Carbon Film Resistor', stock: 5000, demand: 12000, low: 500 },
-            { pn: 'RES-1K', name: 'Resistor 1kΩ', desc: 'Carbon Film Resistor', stock: 4000, demand: 8000, low: 400 },
-            { pn: 'IC-LM358', name: 'IC LM358', desc: 'Dual Op-Amp IC', stock: 300, demand: 800, low: 50 },
-            { pn: 'IC-555', name: 'IC 555 Timer', desc: 'Precision Timer IC', stock: 250, demand: 1000, low: 40 },
-            { pn: 'DIO-1N4007', name: 'Diode 1N4007', desc: 'General Purpose Rectifier', stock: 2000, demand: 6000, low: 200 },
-            { pn: 'ZEN-5.1V', name: 'Zener Diode 5.1V', desc: 'Voltage Regulator Diode', stock: 400, demand: 1200, low: 80 },
-            { pn: 'REG-7805', name: 'Voltage Regulator 7805', desc: '5V Linear Regulator', stock: 500, demand: 500, low: 30 },
-            { pn: 'LED-RED', name: 'LED Red 5mm', desc: 'Diffused Red LED', stock: 3000, demand: 9000, low: 500 },
-            { pn: 'LED-GREEN', name: 'LED Green 5mm', desc: 'Diffused Green LED', stock: 3000, demand: 9000, low: 500 },
-            { pn: 'TR-BC547', name: 'Transistor BC547', desc: 'NPN Transistor', stock: 800, demand: 2000, low: 100 },
-            { pn: 'REL-12V', name: 'Relay 12V', desc: 'SPDT Electromagnetic Relay', stock: 300, demand: 500, low: 20 },
-            { pn: 'CONN-2P', name: 'Connector 2-Pin', desc: '2.54mm Screw Terminal', stock: 600, demand: 1500, low: 100 },
-            { pn: 'RES-470', name: 'Resistor 470Ω', desc: 'Carbon Film Resistor', stock: 5000, demand: 10000, low: 500 },
-            { pn: 'IC-SENSOR-X1', name: 'Sensor IC X1', desc: 'High-Precision Analog Sensor', stock: 500, demand: 100, low: 10 }
+            { pn: 'CAP-10UF', name: 'Capacitor 10µF', desc: 'Electrolytic Capacitor 25V', stock: 1000, demand: 3000, low: 100 },
+            { pn: 'CAP-100UF', name: 'Capacitor 100µF', desc: 'Electrolytic Capacitor 50V', stock: 500, demand: 2000, low: 50 },
+            { pn: 'RES-220', name: 'Resistor 220Ω', desc: '1/4W Carbon Film Resistor', stock: 5000, demand: 12000, low: 500 },
+            { pn: 'RES-1K', name: 'Resistor 1kΩ', desc: '1/4W Carbon Film Resistor', stock: 4000, demand: 8000, low: 400 },
+            { pn: 'IC-LM358', name: 'IC LM358', desc: 'Dual Operational Amplifier IC', stock: 300, demand: 800, low: 50 },
+            { pn: 'IC-555', name: 'IC 555 Timer', desc: 'Standard Precision Timer IC', stock: 250, demand: 1000, low: 40 },
+            { pn: 'DIO-1N4007', name: 'Diode 1N4007', desc: '1A 1000V Rectifier Diode', stock: 2000, demand: 6000, low: 200 },
+            { pn: 'ZEN-5.1V', name: 'Zener Diode 5.1V', desc: '500mW Voltage Regulator Diode', stock: 400, demand: 1200, low: 80 },
+            { pn: 'REG-7805', name: 'Voltage Regulator 7805', desc: '5V 1.5A Positive Linear Regulator', stock: 500, demand: 500, low: 30 },
+            { pn: 'LED-RED', name: 'LED Red 5mm', desc: 'Diffused Red Indicator LED', stock: 3000, demand: 9000, low: 500 },
+            { pn: 'LED-GREEN', name: 'LED Green 5mm', desc: 'Diffused Green Indicator LED', stock: 3000, demand: 9000, low: 500 },
+            { pn: 'TR-BC547', name: 'Transistor BC547', desc: 'NPN General Purpose BJT', stock: 800, demand: 2000, low: 100 },
+            { pn: 'REL-12V', name: 'Relay 12V', desc: 'SPDT Electromagnetic Power Relay', stock: 300, demand: 500, low: 20 },
+            { pn: 'CONN-2P', name: 'Connector 2-Pin', desc: '2.54mm Pitch Screw Terminal Block', stock: 600, demand: 1500, low: 100 },
+            { pn: 'RES-470', name: 'Resistor 470Ω', desc: '1/4W Carbon Film Resistor', stock: 5000, demand: 10000, low: 500 },
+            { pn: 'IC-SENSOR-X1', name: 'Sensor IC X1', desc: 'High-Precision Analog Temperature Sensor', stock: 500, demand: 100, low: 10 }
         ];
-
-        // Ensure we don't deduct below 0 in the seed loop
-        // ... (rest of the loop is the same)
 
         const compIds = {};
         for (const c of components) {
@@ -130,12 +169,12 @@ const setupDemo = async () => {
         }
 
         const pcbs = [
-            { name: 'PCB-A', desc: 'Control Board' },
-            { name: 'PCB-B', desc: 'Power Board' },
-            { name: 'PCB-C', desc: 'Indicator Board' },
-            { name: 'PCB-D', desc: 'Relay Driver Board' },
-            { name: 'PCB-E', desc: 'Voltage Regulation Board' },
-            { name: 'PCB-F', desc: 'Sensor Module' }
+            { name: 'PCB-A', desc: 'Microcontroller Control Board' },
+            { name: 'PCB-B', desc: 'Power Supply & Rectifier Board' },
+            { name: 'PCB-C', desc: 'LED Status Indicator Board' },
+            { name: 'PCB-D', desc: 'Isolated Relay Driver Board' },
+            { name: 'PCB-E', desc: '5V Voltage Regulation Board' },
+            { name: 'PCB-F', desc: 'Precision Environmental Sensor Module' }
         ];
 
         const pcbIds = {};
@@ -209,7 +248,6 @@ const setupDemo = async () => {
             }
         }
 
-        const bcrypt = require('bcrypt');
         const salt = await bcrypt.genSalt(10);
         const passwordHash = await bcrypt.hash('Admin@1234', salt);
         await client.query(
@@ -217,7 +255,7 @@ const setupDemo = async () => {
             ['admin', passwordHash, 'admin']
         );
 
-        // Seed some initial Pending Triggers for low stock items
+        // Seed initial Pending Triggers for demo
         console.log('Seeding initial procurement triggers...');
         const lowStockComps = await client.query(
             "SELECT id FROM components WHERE part_number IN ('REL-12V', 'REG-7805', 'IC-SENSOR-X1')"
@@ -229,11 +267,10 @@ const setupDemo = async () => {
             );
         }
 
-        // 4. SEED HISTORICAL PRODUCTION RUNS (Step 6 Verification)
+        // 4. SEED HISTORICAL PRODUCTION RUNS
         console.log('Seeding historical production runs...');
         const allPcbs = await client.query('SELECT id, pcb_name FROM pcbs');
         for (const pcb of allPcbs.rows) {
-            // Record 2-3 runs per PCB with random quantities
             const runCount = Math.floor(Math.random() * 2) + 2;
             for (let i = 0; i < runCount; i++) {
                 const qty = Math.floor(Math.random() * 50) + 10;
@@ -244,7 +281,6 @@ const setupDemo = async () => {
 
                 const runId = runRes.rows[0].id;
 
-                // Record consumption transactions based on BOM
                 const bom = await client.query(
                     'SELECT component_id, quantity_per_pcb FROM pcb_components WHERE pcb_id = $1',
                     [pcb.id]
@@ -253,18 +289,15 @@ const setupDemo = async () => {
                 for (const item of bom.rows) {
                     const consumed = item.quantity_per_pcb * qty;
 
-                    // Get stock before
                     const stockRes = await client.query('SELECT stock_quantity FROM components WHERE id = $1', [item.component_id]);
                     const stockBefore = stockRes.rows[0].stock_quantity;
-                    const stockAfter = stockBefore - consumed;
+                    const stockAfter = Math.max(0, stockBefore - consumed);
 
-                    // Record Transaction
                     await client.query(
                         'INSERT INTO inventory_transactions (production_run_id, component_id, quantity_used, stock_before, stock_after, transaction_type) VALUES ($1, $2, $3, $4, $5, $6)',
                         [runId, item.component_id, consumed, stockBefore, stockAfter, 'consumption']
                     );
 
-                    // ACTUALLY DEDUCT STOCK (with safety)
                     await client.query(
                         'UPDATE components SET stock_quantity = GREATEST(0, stock_quantity - $1) WHERE id = $2',
                         [consumed, item.component_id]
@@ -273,7 +306,7 @@ const setupDemo = async () => {
             }
         }
 
-        // 5. FORCE LOW STOCK FOR DEMO (Final Polishing)
+        // 5. Critical demo states
         console.log('Forcing critical stock states for demo...');
         await client.query("UPDATE components SET stock_quantity = 8 WHERE part_number = 'IC-SENSOR-X1'");
         await client.query("UPDATE components SET stock_quantity = 12 WHERE part_number = 'REL-12V'");
@@ -281,6 +314,7 @@ const setupDemo = async () => {
 
         await client.query('COMMIT');
         console.log('✅ ENTERPRISE DEMO SETUP COMPLETE!');
+        console.log('👉 Default Login: admin / Admin@1234');
     } catch (err) {
         await client.query('ROLLBACK');
         console.error('❌ SETUP FAILED:', err);
